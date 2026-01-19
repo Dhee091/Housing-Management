@@ -1,0 +1,13 @@
+/* App CSS - minimal styles as most are handled by Tailwind CSS */
+
+/* Smooth scroll behavior for better UX */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Image optimization */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
