@@ -138,13 +138,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Listings collection
     match /listings/{listingId} { ... }
-    
+
     // Users collection
     match /users/{uid} { ... }
-    
+
     // Images collection
     match /images/{imageId} { ... }
-    
+
     // Messages collection
     match /messages/{messageId} { ... }
   }
@@ -158,7 +158,7 @@ service firebase.storage {
   match /b/{bucket}/o {
     // Listing images
     match /listings/{listingId}/{imageId} { ... }
-    
+
     // Catch-all deny
     match /{allPaths=**} { ... }
   }
@@ -171,13 +171,13 @@ service firebase.storage {
 
 ```javascript
 // Test read
-const doc = await getDoc(doc(db, 'listings', 'apt-123'));
+const doc = await getDoc(doc(db, "listings", "apt-123"));
 // Should work for active listings
 
 // Test create
-const newListing = await addDoc(collection(db, 'listings'), {
-  title: 'Test Listing',
-  listedBy: { id: 'user-123' }
+const newListing = await addDoc(collection(db, "listings"), {
+  title: "Test Listing",
+  listedBy: { id: "user-123" },
 });
 // Should work if authenticated
 ```
@@ -186,21 +186,14 @@ const newListing = await addDoc(collection(db, 'listings'), {
 
 ```javascript
 // Test read (should always work)
-const url = await getDownloadURL(
-  ref(storage, 'listings/apt-123/image.jpg')
-);
+const url = await getDownloadURL(ref(storage, "listings/apt-123/image.jpg"));
 
 // Test upload (should work only if own listing)
-await uploadBytes(
-  ref(storage, 'listings/apt-123/new-image.jpg'),
-  file
-);
+await uploadBytes(ref(storage, "listings/apt-123/new-image.jpg"), file);
 // Should work if user owns apt-123
 
 // Test delete (should work only if own listing)
-await deleteObject(
-  ref(storage, 'listings/apt-123/image.jpg')
-);
+await deleteObject(ref(storage, "listings/apt-123/image.jpg"));
 // Should work if user owns apt-123
 ```
 
@@ -211,6 +204,7 @@ await deleteObject(
 **Error:** "Syntax error in rules"
 
 **Solution:**
+
 - Check you copied complete Firestore OR complete Storage block
 - Make sure closing `}` is included
 - Don't mix Firestore and Storage blocks
@@ -221,6 +215,7 @@ await deleteObject(
 **Error:** "Permission denied"
 
 **Solution:**
+
 1. Verify rule changes were published (check timestamp)
 2. Clear browser cache and restart app
 3. Check user is authenticated
@@ -231,6 +226,7 @@ await deleteObject(
 **Error:** "Rules not found in Storage tab"
 
 **Solution:**
+
 - Make sure you're in the Storage tab (not Firestore)
 - Deploy to correct bucket
 - Check project selection
@@ -279,7 +275,6 @@ Monitor these metrics in Firebase Console:
 1. **Storage read requests** - Firestore lookups
    - Each upload triggers ownership check
    - Adds +1 read per upload
-   
 2. **Storage write requests** - Actual uploads
    - Count of successful uploads
    - Failed uploads (permission denied)

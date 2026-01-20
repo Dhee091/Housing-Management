@@ -10,13 +10,13 @@ Quick lookup for Storage security rules.
 // Path: /listings/{listingId}/{imageId}
 allow read: if true;              // Public download
 
-allow create: if isAuthenticated() && 
+allow create: if isAuthenticated() &&
   (isListingOwner(listingId) || isAdmin());  // Own listing only
 
-allow update: if isAuthenticated() && 
+allow update: if isAuthenticated() &&
   (isListingOwner(listingId) || isAdmin());  // Owner/admin only
 
-allow delete: if isAuthenticated() && 
+allow delete: if isAuthenticated() &&
   (isListingOwner(listingId) || isAdmin());  // Owner/admin only
 
 // Catch-all: Deny everything else
@@ -27,12 +27,12 @@ match /{allPaths=**} {
 
 ## Access Matrix (Quick Lookup)
 
-| Operation | Anonymous | Owner | Non-Owner | Admin |
-|-----------|-----------|-------|-----------|-------|
-| **Download** | ✅ | ✅ | ✅ | ✅ |
-| **Upload** | ❌ | ✅ | ❌ | ✅ |
-| **Update** | ❌ | ✅ | ❌ | ✅ |
-| **Delete** | ❌ | ✅ | ❌ | ✅ |
+| Operation    | Anonymous | Owner | Non-Owner | Admin |
+| ------------ | --------- | ----- | --------- | ----- |
+| **Download** | ✅        | ✅    | ✅        | ✅    |
+| **Upload**   | ❌        | ✅    | ❌        | ✅    |
+| **Update**   | ❌        | ✅    | ❌        | ✅    |
+| **Delete**   | ❌        | ✅    | ❌        | ✅    |
 
 ## Helper Functions
 
@@ -54,13 +54,13 @@ function isAdmin() {
 
 ## Error Messages
 
-| Scenario | Error Code | Message |
-|----------|-----------|---------|
-| Anonymous upload | 403 | Permission denied (not authenticated) |
-| Non-owner upload | 403 | Permission denied (not listing owner) |
-| Invalid path | 403 | Permission denied (not in /listings/{id}/) |
-| File too large | 400 | Storage quota exceeded (or client validation) |
-| Upload success | — | 200 OK with download URL |
+| Scenario         | Error Code | Message                                       |
+| ---------------- | ---------- | --------------------------------------------- |
+| Anonymous upload | 403        | Permission denied (not authenticated)         |
+| Non-owner upload | 403        | Permission denied (not listing owner)         |
+| Invalid path     | 403        | Permission denied (not in /listings/{id}/)    |
+| File too large   | 400        | Storage quota exceeded (or client validation) |
+| Upload success   | —          | 200 OK with download URL                      |
 
 ## Deployment Checklist
 
@@ -74,12 +74,12 @@ function isAdmin() {
 
 ## Common Issues
 
-| Problem | Fix |
-|---------|-----|
-| Upload fails with "Permission denied" | Verify user owns listing in Firestore |
-| Download fails | Check rule has `allow read: if true` |
-| Non-owner can upload | Check isListingOwner() is in create rule |
-| Admin can't upload | Check role field = 'admin' exactly |
+| Problem                               | Fix                                      |
+| ------------------------------------- | ---------------------------------------- |
+| Upload fails with "Permission denied" | Verify user owns listing in Firestore    |
+| Download fails                        | Check rule has `allow read: if true`     |
+| Non-owner can upload                  | Check isListingOwner() is in create rule |
+| Admin can't upload                    | Check role field = 'admin' exactly       |
 
 ## Key Concepts
 
@@ -95,15 +95,15 @@ function isAdmin() {
 
 ```javascript
 // Owner upload (should work)
-await uploadBytes(ref(storage, 'listings/own-listing-id/image.jpg'), file);
+await uploadBytes(ref(storage, "listings/own-listing-id/image.jpg"), file);
 // ✅ Success
 
 // Non-owner upload (should fail)
-await uploadBytes(ref(storage, 'listings/other-listing-id/image.jpg'), file);
+await uploadBytes(ref(storage, "listings/other-listing-id/image.jpg"), file);
 // ❌ Permission denied (403)
 
 // Public download (always works)
-const url = await getDownloadURL(ref(storage, 'listings/any-id/image.jpg'));
+const url = await getDownloadURL(ref(storage, "listings/any-id/image.jpg"));
 // ✅ Success
 ```
 
@@ -124,20 +124,21 @@ const url = await getDownloadURL(ref(storage, 'listings/any-id/image.jpg'));
 ## Variables Available in Rules
 
 ```javascript
-request.auth.uid          // Current user's UID
-request.auth              // Full auth token
-request.resource.data     // File metadata
-request.resource.size     // File size in bytes
-request.resource.contentType  // MIME type
-request.time              // Current time
+request.auth.uid; // Current user's UID
+request.auth; // Full auth token
+request.resource.data; // File metadata
+request.resource.size; // File size in bytes
+request.resource.contentType; // MIME type
+request.time; // Current time
 
-resource.data             // Existing file metadata
-resource.size             // Existing file size
+resource.data; // Existing file metadata
+resource.size; // Existing file size
 ```
 
 ## Firestore Lookup Costs
 
 Each create/update triggers one Firestore read:
+
 - Lookup: 1 read
 - Check isAdmin(): 1 read
 - **Total per upload:** 2-3 reads
@@ -203,21 +204,25 @@ User tries to upload to /listings/{listingId}/image.jpg
 ## Common Patterns
 
 ### Allow owner only
+
 ```javascript
 allow create: if request.auth.uid == listing.listedBy.id;
 ```
 
 ### Allow owner or admin
+
 ```javascript
 allow create: if isListingOwner(listingId) || isAdmin();
 ```
 
 ### Public read
+
 ```javascript
 allow read: if true;
 ```
 
 ### Deny everything
+
 ```javascript
 allow read, write: if false;
 ```

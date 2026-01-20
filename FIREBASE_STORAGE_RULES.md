@@ -39,6 +39,7 @@ allow read: if true;
 ```
 
 **Who can download:**
+
 - ✅ Anonymous users (no login required)
 - ✅ Authenticated users
 - ✅ Anyone with the URL
@@ -46,6 +47,7 @@ allow read: if true;
 **Use case:** Users viewing listing photos don't need to be logged in
 
 **Example:**
+
 ```javascript
 // Anyone can download this image
 const url = "https://storage.googleapis.com/.../listings/apt-123/img-001";
@@ -55,42 +57,47 @@ const response = await fetch(url);
 ### Create Access (Authenticated + Owner/Admin)
 
 ```javascript
-allow create: if isAuthenticated() && 
+allow create: if isAuthenticated() &&
   (isListingOwner(listingId) || isAdmin());
 ```
 
 **Who can upload:**
+
 - ✅ Listing owner uploading to their listing
 - ✅ Admin users uploading to any listing
 - ❌ Non-owner authenticated users
 - ❌ Anonymous users
 
 **Validation:**
+
 1. User must be logged in (`isAuthenticated()`)
 2. User must own the listing being uploaded to (`isListingOwner(listingId)`)
    - OR user must be an admin (`isAdmin()`)
 3. Path must match `/listings/{listingId}/filename`
 
 **Example - Allowed:**
+
 ```typescript
 // User owns listing apt-123, can upload
-uploadBytes(ref(storage, 'listings/apt-123/living-room.jpg'), file);
+uploadBytes(ref(storage, "listings/apt-123/living-room.jpg"), file);
 ```
 
 **Example - Denied (FORBIDDEN 403):**
+
 ```typescript
 // User does NOT own listing apt-456, upload fails
-uploadBytes(ref(storage, 'listings/apt-456/image.jpg'), file); // ❌ FORBIDDEN
+uploadBytes(ref(storage, "listings/apt-456/image.jpg"), file); // ❌ FORBIDDEN
 ```
 
 ### Update Access (Owner/Admin Only)
 
 ```javascript
-allow update: if isAuthenticated() && 
+allow update: if isAuthenticated() &&
   (isListingOwner(listingId) || isAdmin());
 ```
 
 **Who can update:**
+
 - ✅ Listing owner (can modify file metadata)
 - ✅ Admin users (can modify any file)
 - ❌ Non-owner users
@@ -101,23 +108,25 @@ allow update: if isAuthenticated() &&
 ### Delete Access (Owner/Admin Only)
 
 ```javascript
-allow delete: if isAuthenticated() && 
+allow delete: if isAuthenticated() &&
   (isListingOwner(listingId) || isAdmin());
 ```
 
 **Who can delete:**
+
 - ✅ Listing owner (can delete their images)
 - ✅ Admin users (can delete any images)
 - ❌ Non-owner users
 - ❌ Anonymous users
 
 **Example:**
+
 ```typescript
 // User owns apt-123, can delete
-await deleteObject(ref(storage, 'listings/apt-123/old-photo.jpg')); // ✅
+await deleteObject(ref(storage, "listings/apt-123/old-photo.jpg")); // ✅
 
 // User doesn't own apt-456, delete fails
-await deleteObject(ref(storage, 'listings/apt-456/photo.jpg')); // ❌ FORBIDDEN
+await deleteObject(ref(storage, "listings/apt-456/photo.jpg")); // ❌ FORBIDDEN
 ```
 
 ## Helper Functions
@@ -152,6 +161,7 @@ Checks if the current user owns the listing by comparing their UID with `listing
 - **Note:** This lookup reads from Firestore (real-time verification)
 
 **How it works:**
+
 1. Extract `listingId` from path `/listings/{listingId}/file`
 2. Look up listing document from Firestore
 3. Compare `request.auth.uid` with `listing.listedBy.id`
@@ -173,11 +183,12 @@ Checks if the current user has admin role.
 - **Future:** Can be upgraded to use Firebase custom claims for performance
 
 **User document:**
+
 ```json
 {
   "uid": "user-123",
   "email": "admin@example.com",
-  "role": "admin"  // This field is checked
+  "role": "admin" // This field is checked
 }
 ```
 
@@ -196,6 +207,7 @@ The `/listings/{listingId}/` path is part of the security check:
 ```
 
 **Example - Path Validation:**
+
 ```typescript
 // User owns apartment "apt-123"
 // ✅ CAN upload: /listings/apt-123/image.jpg
@@ -231,6 +243,7 @@ match /{allPaths=**} {
 This explicitly denies access to any paths not covered by previous rules.
 
 **Security benefit:**
+
 - Prevents users from uploading to `/other-folder/file`
 - Prevents accessing files in unexpected locations
 - Fail-safe: unknown paths are always denied
@@ -316,17 +329,17 @@ The Storage rules work together with the backend service layer:
 async function uploadListingImages(listingId, files, currentUser) {
   // 1. Client-side validation
   validateFiles(files); // Check MIME type, size
-  
+
   // 2. Upload to Storage
   const ref = ref(storage, `listings/${listingId}/${imageId}`);
   await uploadBytes(ref, file, {
     customMetadata: {
       uploadedBy: currentUser.uid,
       uploadedAt: new Date().toISOString(),
-      listingId
-    }
+      listingId,
+    },
   });
-  
+
   // If rule denies: Firebase throws Permission denied error
   // Rule check: isListingOwner(listingId)
 }
@@ -337,7 +350,7 @@ async function uploadListingImages(listingId, files, currentUser) {
 ```javascript
 // firestore.rules - Storage rules
 match /listings/{listingId}/{imageId} {
-  allow create: if isAuthenticated() && 
+  allow create: if isAuthenticated() &&
     (isListingOwner(listingId) || isAdmin());
 }
 
@@ -354,9 +367,9 @@ function isListingOwner(listingId) {
 try {
   await uploadBytes(ref, file);
 } catch (error) {
-  if (error.code === 'storage/unauthorized') {
+  if (error.code === "storage/unauthorized") {
     // User doesn't own listing
-    console.error('You can only upload to your own listings');
+    console.error("You can only upload to your own listings");
   }
 }
 ```
@@ -403,21 +416,24 @@ VITE_REACT_APP_USE_FIREBASE_EMULATOR=true
 ### Test Cases
 
 1. **Anonymous download (should pass):**
+
    ```typescript
-   const url = storage.ref('listings/apt-123/image.jpg');
+   const url = storage.ref("listings/apt-123/image.jpg");
    // ✅ Can download without auth
    ```
 
 2. **Owner upload (should pass):**
+
    ```typescript
-   const ref = ref(storage, 'listings/apt-123/image.jpg');
+   const ref = ref(storage, "listings/apt-123/image.jpg");
    // User owns apt-123
    // ✅ Can upload
    ```
 
 3. **Non-owner upload (should fail):**
+
    ```typescript
-   const ref = ref(storage, 'listings/apt-456/image.jpg');
+   const ref = ref(storage, "listings/apt-456/image.jpg");
    // User doesn't own apt-456
    // ❌ Permission denied
    ```
@@ -425,7 +441,7 @@ VITE_REACT_APP_USE_FIREBASE_EMULATOR=true
 4. **Admin upload to any listing (should pass):**
    ```typescript
    // User is admin
-   const ref = ref(storage, 'listings/any-id/image.jpg');
+   const ref = ref(storage, "listings/any-id/image.jpg");
    // ✅ Can upload to any listing
    ```
 
@@ -464,6 +480,7 @@ function isAdmin() {
 ```
 
 **Setup:**
+
 - Cloud Function sets admin claim during role change
 - Claims cached in ID token
 - No Firestore lookup needed
@@ -473,7 +490,7 @@ function isAdmin() {
 Add validation for file size in rules:
 
 ```javascript
-allow create: if isAuthenticated() && 
+allow create: if isAuthenticated() &&
   (isListingOwner(listingId) || isAdmin()) &&
   request.resource.size < 5242880;  // 5 MB
 ```
@@ -483,7 +500,7 @@ allow create: if isAuthenticated() &&
 Validate file type in rules:
 
 ```javascript
-allow create: if isAuthenticated() && 
+allow create: if isAuthenticated() &&
   (isListingOwner(listingId) || isAdmin()) &&
   request.resource.contentType.matches('image/.*');
 ```
@@ -495,24 +512,26 @@ allow create: if isAuthenticated() &&
 **Cause:** User doesn't own the listing
 
 **Solution:**
+
 - Check `listing.listedBy.id` matches current user's UID
 - Verify user is logged in
 - Check listing exists
 
 **Code to debug:**
+
 ```typescript
 // Check user's UID
-console.log('User UID:', currentUser.uid);
+console.log("User UID:", currentUser.uid);
 
 // Check listing ownership
-const listing = await getDoc(doc(db, 'listings', listingId));
-console.log('Owner UID:', listing.data().listedBy.id);
+const listing = await getDoc(doc(db, "listings", listingId));
+console.log("Owner UID:", listing.data().listedBy.id);
 
 // Compare
 if (listing.data().listedBy.id === currentUser.uid) {
-  console.log('User owns listing ✅');
+  console.log("User owns listing ✅");
 } else {
-  console.log('User does NOT own listing ❌');
+  console.log("User does NOT own listing ❌");
 }
 ```
 
@@ -521,6 +540,7 @@ if (listing.data().listedBy.id === currentUser.uid) {
 **Cause:** Image doesn't exist or path is wrong
 
 **Solution:**
+
 - Verify listingId and imageId are correct
 - Check image was successfully uploaded
 - Verify Storage rules allow read (they do)
@@ -530,18 +550,19 @@ if (listing.data().listedBy.id === currentUser.uid) {
 **Cause:** User's role field is not 'admin'
 
 **Solution:**
+
 - Check user document in Firestore
 - Verify `/users/{uid}/role` is exactly 'admin' (lowercase)
 - Restart app to refresh auth token
 
 ## Security Summary
 
-| Access Type | Anonymous | Owner | Non-Owner | Admin |
-|------------|-----------|-------|-----------|-------|
-| Read/Download | ✅ | ✅ | ✅ | ✅ |
-| Upload | ❌ | ✅ | ❌ | ✅ |
-| Update | ❌ | ✅ | ❌ | ✅ |
-| Delete | ❌ | ✅ | ❌ | ✅ |
+| Access Type   | Anonymous | Owner | Non-Owner | Admin |
+| ------------- | --------- | ----- | --------- | ----- |
+| Read/Download | ✅        | ✅    | ✅        | ✅    |
+| Upload        | ❌        | ✅    | ❌        | ✅    |
+| Update        | ❌        | ✅    | ❌        | ✅    |
+| Delete        | ❌        | ✅    | ❌        | ✅    |
 
 ## Related Documentation
 
