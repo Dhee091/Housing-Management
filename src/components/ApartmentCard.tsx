@@ -8,10 +8,10 @@
  */
 
 import { Link } from "react-router-dom";
-import type { Apartment } from "../types/apartment";
+import type { ApartmentListing } from "../models/domain";
 
 interface ApartmentCardProps {
-  apartment: Apartment;
+  apartment: ApartmentListing;
 }
 
 export default function ApartmentCard({ apartment }: ApartmentCardProps) {
@@ -28,7 +28,11 @@ export default function ApartmentCard({ apartment }: ApartmentCardProps) {
         {/* Image Container */}
         <div className="relative h-48 bg-gray-200 overflow-hidden">
           <img
-            src={apartment.images[0]}
+            src={
+              typeof apartment.images[0] === "string"
+                ? apartment.images[0]
+                : apartment.images[0].url
+            }
             alt={apartment.title}
             className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
           />
