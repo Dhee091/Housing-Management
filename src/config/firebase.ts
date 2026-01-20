@@ -17,6 +17,7 @@ import { initializeApp } from "firebase/app";
 import type { FirebaseApp } from "firebase/app";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // ============================================================================
 // CONFIGURATION
@@ -74,6 +75,9 @@ export function initializeFirebase(): FirebaseApp {
     ) {
       connectFirestoreEmulator(getFirestore(app), "localhost", 8080);
       connectStorageEmulator(getStorage(app), "localhost", 9199);
+      connectAuthEmulator(getAuth(app), "http://localhost:9099", {
+        disableWarnings: true,
+      });
       console.log("[Firebase] Connected to local emulators");
     }
 
@@ -92,7 +96,7 @@ export function initializeFirebase(): FirebaseApp {
 export function getFirebaseApp(): FirebaseApp {
   if (!app) {
     throw new Error(
-      "[Firebase] Not initialized. Call initializeFirebase() first."
+      "[Firebase] Not initialized. Call initializeFirebase() first.",
     );
   }
   return app;
