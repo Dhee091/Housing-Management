@@ -109,6 +109,19 @@ export function isFirebaseInitialized(): boolean {
   return app !== null;
 }
 
+/**
+ * Get Firebase Storage instance
+ * Throws error if Firebase hasn't been initialized yet
+ */
+export function getFirebaseStorage() {
+  if (!app) {
+    throw new Error(
+      "[Firebase] Not initialized. Call initializeFirebase() first.",
+    );
+  }
+  return getStorage(app);
+}
+
 // ============================================================================
 // ENVIRONMENT VARIABLES GUIDE
 // ============================================================================
