@@ -68,6 +68,7 @@ import type {
   User,
 } from "../../models/domain";
 import type { IListingService, ServiceConfig } from "../types";
+import type { AuthUser } from "../auth/authService";
 
 /**
  * Type alias for Firestore document data
@@ -369,11 +370,27 @@ export class FirebaseListingService implements IListingService {
    * - createdAt (never changes)
    * - Updates updatedAt timestamp
    */
+  /**
+   * Update an existing apartment listing
+   *
+   * Security:
+   * - Only the listing owner or admins can update
+   * - Throws FORBIDDEN error if user lacks permissions
+   *
+   * @param id - Listing ID
+   * @param data - Partial listing data to update
+   * @param currentUser - Authenticated user making the request (for ownership verification)
+   * @param userRole - User's role (to check admin status)
+   * @returns Updated listing
+   * @throws ServiceError with code='FORBIDDEN' if user is not owner or admin
+   */
   async updateListing(
     id: string,
     data: UpdateListingInput,
+    currentUser?: AuthUser,
+    userRole?: "agent" | "owner" | "admin",
   ): Promise<ApartmentListing> {
-    this.log("updateListing", { id });
+    this.log("updateListing", { id, userId: currentUser?.uid });
 
     try {
       // Fetch existing listing
@@ -390,6 +407,11 @@ export class FirebaseListingService implements IListingService {
       }
 
       const existing = docSnapshot.data() as FirestoreListingDocument;
+
+      // Check ownership if current user is provided
+      if (currentUser) {
+        this.assertListingOwnership(existing, currentUser, userRole);
+      }
 
       // Handle image updates if provided
       let processedImages = existing.images;
@@ -437,16 +459,30 @@ export class FirebaseListingService implements IListingService {
   /**
    * Delete a listing (soft delete)
    *
+   * Security:
+   * - Only the listing owner or admins can delete
+   * - Throws FORBIDDEN error if user lacks permissions
+   *
    * Process:
-   * 1. Fetch listing
-   * 2. Delete all images from Storage
-   * 3. Mark as inactive in Firestore (soft delete)
+   * 1. Verify ownership
+   * 2. Fetch listing
+   * 3. Delete all images from Storage
+   * 4. Mark as inactive in Firestore (soft delete)
    *
    * Soft delete means the document remains in Firestore but is hidden
    * from queries (isActive = false). This preserves history and references.
+   *
+   * @param id - Listing ID
+   * @param currentUser - Authenticated user making the request (for ownership verification)
+   * @param userRole - User's role (to check admin status)
+   * @throws ServiceError with code='FORBIDDEN' if user is not owner or admin
    */
-  async deleteListing(id: string): Promise<void> {
-    this.log("deleteListing", { id });
+  async deleteListing(
+    id: string,
+    currentUser?: AuthUser,
+    userRole?: "agent" | "owner" | "admin",
+  ): Promise<void> {
+    this.log("deleteListing", { id, userId: currentUser?.uid });
 
     try {
       const docSnapshot = await getDoc(
@@ -462,6 +498,11 @@ export class FirebaseListingService implements IListingService {
       }
 
       const data = docSnapshot.data() as FirestoreListingDocument;
+
+      // Check ownership if current user is provided
+      if (currentUser) {
+        this.assertListingOwnership(data, currentUser, userRole);
+      }
 
       // Delete images from Storage
       await Promise.all(
@@ -688,6 +729,44 @@ export class FirebaseListingService implements IListingService {
     } catch (error) {
       // Silently fail - image might already be deleted
       this.log("deleteImageFromStorage failed", { imageUrl, error });
+    }
+  }
+
+  /**
+   * Verify that the current user owns the listing or is an admin
+   *
+   * Security utility for updateListing and deleteListing.
+   * Throws FORBIDDEN error if user is neither the listing owner nor an admin.
+   *
+   * @param listing - The Firestore listing document
+   * @param currentUser - Authenticated user making the request
+   * @param userRole - User's role (to check admin status)
+   * @throws ServiceError with code='FORBIDDEN' if ownership check fails
+   *
+   * Access rules:
+   * - Listing owner (listedBy.id === currentUser.uid) can access
+   * - Admin users can access any listing
+   * - All others are denied
+   */
+  private assertListingOwnership(
+    listing: FirestoreListingDocument,
+    currentUser: AuthUser,
+    userRole?: "agent" | "owner" | "admin",
+  ): void {
+    const isOwner = listing.listedBy.id === currentUser.uid;
+    const isAdmin = userRole === "admin";
+
+    if (!isOwner && !isAdmin) {
+      throw this.createServiceError(
+        "FORBIDDEN",
+        403,
+        `You do not have permission to modify this listing. Only the listing owner or admins can perform this action.`,
+        {
+          listingOwner: listing.listedBy.id,
+          currentUser: currentUser.uid,
+          userRole,
+        },
+      );
     }
   }
 

@@ -19,6 +19,7 @@ import type {
   PaginatedResult,
   ListingFilters,
 } from "../models/domain";
+import type { AuthUser } from "./auth/authService";
 
 /**
  * IListingService - Service interface for apartment listing operations
@@ -101,40 +102,62 @@ export interface IListingService {
   /**
    * Update an existing apartment listing
    *
+   * Security:
+   * - Optional ownership verification if currentUser is provided
+   * - Throws FORBIDDEN error if user is not owner or admin
+   *
    * @param id - Listing ID
    * @param data - Partial listing data to update
+   * @param currentUser - (Optional) Authenticated user for ownership verification
+   * @param userRole - (Optional) User's role to check admin status
    * @returns Promise resolving to the updated listing
    * @throws ServiceError with code='NOT_FOUND' if listing doesn't exist
+   * @throws ServiceError with code='FORBIDDEN' if user is not owner or admin
    *
    * Example:
    * ```typescript
-   * const updated = await listingsService.updateListing('apt-123', {
-   *   price: 550000,
-   *   unitsAvailable: 1
-   * });
+   * const { currentUser, userRole } = useAuth();
+   * const updated = await listingsService.updateListing(
+   *   'apt-123',
+   *   { rent: 550000, unitsAvailable: 1 },
+   *   currentUser,
+   *   userRole
+   * );
    * ```
    */
   updateListing(
     id: string,
     data: UpdateListingInput,
+    currentUser?: AuthUser,
+    userRole?: "agent" | "owner" | "admin",
   ): Promise<ApartmentListing>;
 
   /**
    * Delete a listing by ID
    *
-   * Implementation note: Can be soft delete (set isActive: false) or hard delete
-   * depending on backend choice. Service ensures consistent behavior.
+   * Security:
+   * - Optional ownership verification if currentUser is provided
+   * - Throws FORBIDDEN error if user is not owner or admin
+   * - Uses soft delete (marks as inactive) to preserve history
    *
    * @param id - Listing ID
+   * @param currentUser - (Optional) Authenticated user for ownership verification
+   * @param userRole - (Optional) User's role to check admin status
    * @returns Promise that resolves when deletion is complete
    * @throws ServiceError with code='NOT_FOUND' if listing doesn't exist
+   * @throws ServiceError with code='FORBIDDEN' if user is not owner or admin
    *
    * Example:
    * ```typescript
-   * await listingsService.deleteListing('apt-123');
+   * const { currentUser, userRole } = useAuth();
+   * await listingsService.deleteListing('apt-123', currentUser, userRole);
    * ```
    */
-  deleteListing(id: string): Promise<void>;
+  deleteListing(
+    id: string,
+    currentUser?: AuthUser,
+    userRole?: "agent" | "owner" | "admin",
+  ): Promise<void>;
 
   /**
    * Search listings with full-text search capability

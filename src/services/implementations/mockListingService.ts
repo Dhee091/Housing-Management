@@ -25,6 +25,7 @@ import type {
   ServiceError,
 } from "../../models/domain";
 import type { IListingService, ServiceConfig } from "../types";
+import type { AuthUser } from "../auth/authService";
 
 /**
  * In-memory data store
@@ -224,8 +225,10 @@ export class MockListingService implements IListingService {
   async updateListing(
     id: string,
     data: UpdateListingInput,
+    currentUser?: AuthUser,
+    userRole?: "agent" | "owner" | "admin",
   ): Promise<ApartmentListing> {
-    this.log("updateListing", { id });
+    this.log("updateListing", { id, userId: currentUser?.uid });
 
     const existing = apartmentListings.get(id);
     if (!existing) {
@@ -234,6 +237,11 @@ export class MockListingService implements IListingService {
         404,
         `Listing with ID ${id} not found`,
       );
+    }
+
+    // Check ownership if current user is provided
+    if (currentUser) {
+      this.assertListingOwnership(existing, currentUser, userRole);
     }
 
     const updated: ApartmentListing = {
@@ -248,8 +256,12 @@ export class MockListingService implements IListingService {
     return updated;
   }
 
-  async deleteListing(id: string): Promise<void> {
-    this.log("deleteListing", { id });
+  async deleteListing(
+    id: string,
+    currentUser?: AuthUser,
+    userRole?: "agent" | "owner" | "admin",
+  ): Promise<void> {
+    this.log("deleteListing", { id, userId: currentUser?.uid });
 
     const listing = apartmentListings.get(id);
     if (!listing) {
@@ -258,6 +270,11 @@ export class MockListingService implements IListingService {
         404,
         `Listing with ID ${id} not found`,
       );
+    }
+
+    // Check ownership if current user is provided
+    if (currentUser) {
+      this.assertListingOwnership(listing, currentUser, userRole);
     }
 
     // Soft delete: mark as inactive instead of removing
@@ -337,6 +354,45 @@ export class MockListingService implements IListingService {
       hasMore: page < totalPages,
       nextCursor: page < totalPages ? String(page + 1) : null,
     };
+  }
+
+  /**
+   * Verify that the current user owns the listing or is an admin
+   *
+   * Security utility for updateListing and deleteListing.
+   * Throws FORBIDDEN error if user is neither the listing owner nor an admin.
+   *
+   * @param listing - The apartment listing
+   * @param currentUser - Authenticated user making the request
+   * @param userRole - User's role (to check admin status)
+   * @throws ServiceError with code='FORBIDDEN' if ownership check fails
+   *
+   * Access rules:
+   * - Listing owner (listedBy.id === currentUser.uid) can access
+   * - Admin users can access any listing
+   * - All others are denied
+   */
+  private assertListingOwnership(
+    listing: ApartmentListing,
+    currentUser: AuthUser,
+    userRole?: "agent" | "owner" | "admin",
+  ): void {
+    const isOwner = listing.listedBy.id === currentUser.uid;
+    const isAdmin = userRole === "admin";
+
+    if (!isOwner && !isAdmin) {
+      throw this.createServiceError(
+        "FORBIDDEN",
+        403,
+        `You do not have permission to modify this listing. Only the listing owner or admins can perform this action.`,
+        {
+          listingId: listing.id,
+          listingOwner: listing.listedBy.id,
+          currentUser: currentUser.uid,
+          userRole,
+        },
+      );
+    }
   }
 
   /**
