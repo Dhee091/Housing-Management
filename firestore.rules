@@ -158,14 +158,100 @@ service cloud.firestore {
   }
 }
 
+// ============================================================================
+// FIREBASE STORAGE RULES
+// ============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    /**
+     * Helper function: Check if user is authenticated
+     */
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    /**
+     * Helper function: Check if user owns the listing
+     * Extracts listingId from path: /listings/{listingId}/*
+     */
+    function isListingOwner(listingId) {
+      return get(/databases/(default)/documents/listings/$(listingId)).data.listedBy.id == request.auth.uid;
+    }
+
+    /**
+     * Helper function: Check if user is an admin
+     */
+    function isAdmin() {
+      return get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    /**
+     * Listing images storage - /listings/{listingId}/{imageId}
+     *
+     * Security rules for uploaded listing images
+     *
+     * Read: Public - anyone can download listing images
+     * Create: Only owner or admin can upload to their listing's folder
+     * Update: Only owner or admin can update (modify metadata)
+     * Delete: Only owner or admin can delete their images
+     *
+     * Access control:
+     * - User can only upload to /listings/{listingId}/ if they own that listing
+     * - Path validation prevents uploading to other users' listings
+     * - Image metadata stores uploader ID for additional verification
+     */
+    match /listings/{listingId}/{imageId} {
+      // Public read: Anyone can download images from active listings
+      allow read: if true;
+
+      // Create: Only listing owner or admin can upload images
+      // Validates the listingId path matches a listing the user owns
+      allow create: if isAuthenticated() && 
+        (isListingOwner(listingId) || isAdmin());
+
+      // Update: Only owner or admin can update image metadata
+      allow update: if isAuthenticated() && 
+        (isListingOwner(listingId) || isAdmin());
+
+      // Delete: Only owner or admin can delete images
+      allow delete: if isAuthenticated() && 
+        (isListingOwner(listingId) || isAdmin());
+    }
+
+    /**
+     * All other paths in storage - Default deny
+     *
+     * Security: Explicitly deny access to any paths not covered above
+     * This prevents users from uploading to arbitrary locations
+     */
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
 /*
  * HOW TO DEPLOY THESE RULES:
  *
+ * FIRESTORE RULES:
  * 1. Go to Firebase Console (https://console.firebase.google.com/)
  * 2. Select your project
  * 3. Go to Firestore Database > Rules tab
- * 4. Copy and paste the entire rules_version = '2'; ... section
+ * 4. Copy and paste the cloud.firestore service block
  * 5. Click "Publish"
+ *
+ * FIREBASE STORAGE RULES:
+ * 1. Go to Firebase Console (https://console.firebase.google.com/)
+ * 2. Select your project
+ * 3. Go to Storage > Rules tab
+ * 4. Copy and paste the firebase.storage service block
+ * 5. Click "Publish"
+ *
+ * NOTE: Firestore and Storage rules may be in separate tabs/files in Console
+ * The Firestore service block goes to Database > Rules
+ * The Storage service block goes to Storage > Rules
  *
  * TESTING RULES:
  *
@@ -176,10 +262,20 @@ service cloud.firestore {
  * 4. Test with Firestore Emulator UI (http://localhost:4000)
  *
  * Test scenarios to verify:
+ *
+ * FIRESTORE TESTS:
  * - Anonymous user: Can read active listings, cannot create/update
  * - Authenticated owner: Can read own profile, create/update own listings
  * - Authenticated non-owner: Cannot update other's listings (FORBIDDEN 403)
  * - Admin user: Can update any listing
+ *
+ * STORAGE TESTS:
+ * - Anonymous user: Can read images, cannot upload/delete
+ * - Authenticated owner: Can upload/delete to own listing folder
+ * - Authenticated non-owner: Cannot upload/delete to other's listing folder (FORBIDDEN 403)
+ * - Admin user: Can upload/delete to any listing folder
+ *
+ * Test file upload to: /listings/{listingId}/test-image.jpg
  *
  * SECURITY NOTES:
  *
@@ -203,6 +299,39 @@ service cloud.firestore {
  *    - User profiles are private (only owner can read)
  *    - Public user reads blocked (no profile enumeration)
  *    - Listing data is public (real estate is inherently public)
+ *
+ * STORAGE SECURITY:
+ *
+ * 1. Upload Restrictions:
+ *    - Only authenticated users can upload images
+ *    - Path validation: User can only upload to /listings/{listingId}/ if they own that listing
+ *    - Admin users can upload to any listing's folder
+ *    - Prevents unauthorized uploads to other users' listings
+ *
+ * 2. Ownership Verification:
+ *    - Path-based: Extract listingId from upload path
+ *    - Check if request.auth.uid matches listing.listedBy.id
+ *    - Lookup happens in Firestore (real-time check)
+ *    - Admin bypass allows support staff to manage listings
+ *
+ * 3. Download Access:
+ *    - Public read access to all listing images
+ *    - No authentication required for downloads
+ *    - Allows unauthenticated users to view listing photos
+ *    - Downloads work with direct URLs or via app
+ *
+ * 4. Metadata:
+ *    - storageService.ts stores metadata with each upload:
+ *      - uploadedBy: User's UID
+ *      - uploadedAt: ISO 8601 timestamp
+ *      - originalFileName: User's original filename
+ *      - listingId: Associated listing
+ *    - Provides audit trail and verification
+ *
+ * 5. Path Security:
+ *    - /listings/{listingId}/* - Restricted to owner/admin
+ *    - /{allPaths=**} - Default deny for everything else
+ *    - Prevents users from creating files in unauthorized folders
  *
  * FUTURE IMPROVEMENTS:
  *
