@@ -48,7 +48,7 @@ export interface IListingService {
    * ```
    */
   getListings(
-    filters?: ListingFilters
+    filters?: ListingFilters,
   ): Promise<PaginatedResult<ApartmentListing>>;
 
   /**
@@ -68,20 +68,35 @@ export interface IListingService {
   /**
    * Create a new apartment listing
    *
-   * @param data - Listing data without id, createdAt, updatedAt
+   * @param data - Listing data without id, createdAt, updatedAt, listedBy
+   * @param authenticatedUserId - The authenticated user's ID (required for security)
+   * @param userRole - The authenticated user's role (required for security)
    * @returns Promise resolving to the created listing with generated id and timestamps
    * @throws ServiceError if validation fails or creation fails
    *
+   * Security note: authenticatedUserId and userRole are set by the backend and cannot
+   * be overridden by client input. The listedBy field in data is ignored.
+   *
    * Example:
    * ```typescript
-   * const newListing = await listingsService.createListing({
-   *   title: "Modern 3-Bed in Ikoyi",
-   *   price: 500000,
-   *   // ... other required fields
-   * });
+   * const { currentUser, userRole } = useAuth();
+   * const newListing = await listingsService.createListing(
+   *   {
+   *     title: "Modern 3-Bed in Ikoyi",
+   *     rent: 500000,
+   *     // ... other required fields
+   *     // NOTE: listedBy field is ignored, user info comes from authentication
+   *   },
+   *   currentUser!.uid,
+   *   userRole!
+   * );
    * ```
    */
-  createListing(data: CreateListingInput): Promise<ApartmentListing>;
+  createListing(
+    data: Omit<CreateListingInput, "listedBy">,
+    authenticatedUserId: string,
+    userRole: "agent" | "owner",
+  ): Promise<ApartmentListing>;
 
   /**
    * Update an existing apartment listing
@@ -101,7 +116,7 @@ export interface IListingService {
    */
   updateListing(
     id: string,
-    data: UpdateListingInput
+    data: UpdateListingInput,
   ): Promise<ApartmentListing>;
 
   /**
@@ -140,7 +155,7 @@ export interface IListingService {
    */
   search(
     query: string,
-    filters?: Omit<ListingFilters, "searchTerm">
+    filters?: Omit<ListingFilters, "searchTerm">,
   ): Promise<PaginatedResult<ApartmentListing>>;
 
   /**
@@ -157,7 +172,7 @@ export interface IListingService {
    */
   getListingsByUser(
     userId: string,
-    filters?: ListingFilters
+    filters?: ListingFilters,
   ): Promise<PaginatedResult<ApartmentListing>>;
 }
 

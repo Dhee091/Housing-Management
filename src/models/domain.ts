@@ -152,8 +152,12 @@ export interface ApartmentListing {
 
 /**
  * CreateListingInput - DTO for creating a new apartment listing
- * Excludes auto-generated fields (id, createdAt, updatedAt)
- * Used by the service layer's createListing method
+ * Excludes auto-generated fields (id, createdAt, updatedAt, listedBy.id, listedBy.role)
+ * The authenticated user's ID and role are injected by the service layer for security.
+ * This prevents clients from listing properties under someone else's name.
+ *
+ * Optional lister fields (name, phone, email, company) can be provided but are not required.
+ * If not provided, they should be fetched from the authentication context or user profile.
  */
 export interface CreateListingInput {
   title: string;
@@ -165,7 +169,12 @@ export interface CreateListingInput {
   bathrooms: number;
   unitsAvailable: number;
   amenities: string[];
-  listedBy: User;
+
+  // Optional lister details (authenticated user's ID and role are set by the service)
+  listedByName?: string;
+  listedByPhone?: string;
+  listedByEmail?: string;
+  listedByCompany?: string;
 }
 
 /**

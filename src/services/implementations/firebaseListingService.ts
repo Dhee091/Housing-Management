@@ -65,6 +65,7 @@ import type {
   ListingFilters,
   ServiceError,
   ListingImage,
+  User,
 } from "../../models/domain";
 import type { IListingService, ServiceConfig } from "../types";
 
@@ -73,8 +74,10 @@ import type { IListingService, ServiceConfig } from "../types";
  * Represents how documents are stored in Firestore (with timestamps as Firestore Timestamps)
  * Note: The document ID is stored separately as the document key in Firestore
  */
-interface FirestoreListingDocument
-  extends Omit<ApartmentListing, "createdAt" | "updatedAt" | "id"> {
+interface FirestoreListingDocument extends Omit<
+  ApartmentListing,
+  "createdAt" | "updatedAt" | "id"
+> {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -104,13 +107,22 @@ export class FirebaseListingService implements IListingService {
    * 4. Create Firestore document with image references
    * 5. Return complete listing with IDs and timestamps
    *
+   * Security:
+   * - authenticatedUserId and userRole are set by the backend
+   * - Client-provided listedBy data is ignored
+   * - Ensures users can only list properties under their own ID and role
+   *
    * Error handling:
    * - Validation errors: throw ServiceError with code='VALIDATION_ERROR'
    * - Storage upload failures: throw ServiceError with code='STORAGE_ERROR'
    * - Firestore failures: throw ServiceError with code='DATABASE_ERROR'
    */
-  async createListing(data: CreateListingInput): Promise<ApartmentListing> {
-    this.log("createListing", { title: data.title });
+  async createListing(
+    data: Omit<CreateListingInput, "listedBy">,
+    authenticatedUserId: string,
+    userRole: "agent" | "owner",
+  ): Promise<ApartmentListing> {
+    this.log("createListing", { title: data.title, authenticatedUserId });
 
     try {
       // Generate unique ID (Firestore auto-ID style)
@@ -119,6 +131,17 @@ export class FirebaseListingService implements IListingService {
 
       // Process images: upload to Storage and get URLs
       const processedImages = await this.processImages(data.images, listingId);
+
+      // Build listedBy object from authenticated user (cannot be overridden by client)
+      // This ensures the listing is always attributed to the authenticated user
+      const listedBy: User = {
+        id: authenticatedUserId,
+        name: data.listedByName || "Unknown User",
+        role: userRole,
+        phone: data.listedByPhone || "",
+        email: data.listedByEmail || "",
+        company: data.listedByCompany,
+      };
 
       // Build Firestore document
       const firestoreDoc: FirestoreListingDocument = {
@@ -131,7 +154,7 @@ export class FirebaseListingService implements IListingService {
         unitsAvailable: data.unitsAvailable,
         amenities: data.amenities,
         images: processedImages,
-        listedBy: data.listedBy,
+        listedBy,
         status: "available",
         isActive: true,
         createdAt: now,
@@ -141,7 +164,7 @@ export class FirebaseListingService implements IListingService {
       // Write to Firestore
       await setDoc(
         doc(this.db, this.LISTINGS_COLLECTION, listingId),
-        firestoreDoc as FirestoreListingDocument
+        firestoreDoc as FirestoreListingDocument,
       );
 
       // Return domain model
@@ -151,7 +174,7 @@ export class FirebaseListingService implements IListingService {
         "DATABASE_ERROR",
         500,
         `Failed to create listing: ${this.extractErrorMessage(error)}`,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -180,7 +203,7 @@ export class FirebaseListingService implements IListingService {
    * For production, integrate Algolia, Typesense, or Firestore's vector search
    */
   async getListings(
-    filters?: ListingFilters
+    filters?: ListingFilters,
   ): Promise<PaginatedResult<ApartmentListing>> {
     this.log("getListings", { filters });
 
@@ -210,7 +233,7 @@ export class FirebaseListingService implements IListingService {
       // Add units filter
       if (filters?.minUnitsAvailable !== undefined) {
         constraints.push(
-          where("unitsAvailable", ">=", filters.minUnitsAvailable)
+          where("unitsAvailable", ">=", filters.minUnitsAvailable),
         );
       }
 
@@ -233,7 +256,7 @@ export class FirebaseListingService implements IListingService {
       // First query without pagination to get total count
       const baseQuery = query(
         collection(this.db, this.LISTINGS_COLLECTION),
-        ...constraints
+        ...constraints,
       );
 
       const allDocsSnapshot = await getDocs(baseQuery);
@@ -253,7 +276,7 @@ export class FirebaseListingService implements IListingService {
               data.location.state.toLowerCase().includes(searchLower) ||
               data.listedBy.name.toLowerCase().includes(searchLower)
             );
-          }
+          },
         );
       }
 
@@ -272,8 +295,8 @@ export class FirebaseListingService implements IListingService {
         (doc: QueryDocumentSnapshot<DocumentData>) =>
           this.mapFirestoreToListing(
             doc.id,
-            doc.data() as FirestoreListingDocument
-          )
+            doc.data() as FirestoreListingDocument,
+          ),
       );
 
       return {
@@ -290,7 +313,7 @@ export class FirebaseListingService implements IListingService {
         "DATABASE_ERROR",
         500,
         `Failed to fetch listings: ${this.extractErrorMessage(error)}`,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -306,14 +329,14 @@ export class FirebaseListingService implements IListingService {
 
     try {
       const docSnapshot = await getDoc(
-        doc(this.db, this.LISTINGS_COLLECTION, id)
+        doc(this.db, this.LISTINGS_COLLECTION, id),
       );
 
       if (!docSnapshot.exists()) {
         throw this.createServiceError(
           "NOT_FOUND",
           404,
-          `Listing with ID ${id} not found`
+          `Listing with ID ${id} not found`,
         );
       }
 
@@ -326,7 +349,7 @@ export class FirebaseListingService implements IListingService {
         "DATABASE_ERROR",
         500,
         `Failed to fetch listing: ${this.extractErrorMessage(error)}`,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -348,21 +371,21 @@ export class FirebaseListingService implements IListingService {
    */
   async updateListing(
     id: string,
-    data: UpdateListingInput
+    data: UpdateListingInput,
   ): Promise<ApartmentListing> {
     this.log("updateListing", { id });
 
     try {
       // Fetch existing listing
       const docSnapshot = await getDoc(
-        doc(this.db, this.LISTINGS_COLLECTION, id)
+        doc(this.db, this.LISTINGS_COLLECTION, id),
       );
 
       if (!docSnapshot.exists()) {
         throw this.createServiceError(
           "NOT_FOUND",
           404,
-          `Listing with ID ${id} not found`
+          `Listing with ID ${id} not found`,
         );
       }
 
@@ -376,8 +399,8 @@ export class FirebaseListingService implements IListingService {
           existing.images.map((img) =>
             this.deleteImageFromStorage(img.url).catch(() => {
               // Silently fail if image doesn't exist
-            })
-          )
+            }),
+          ),
         );
 
         // Upload new images
@@ -394,7 +417,7 @@ export class FirebaseListingService implements IListingService {
       // Update Firestore document
       await updateDoc(
         doc(this.db, this.LISTINGS_COLLECTION, id),
-        updatePayload
+        updatePayload,
       );
 
       // Fetch and return updated document
@@ -406,7 +429,7 @@ export class FirebaseListingService implements IListingService {
         "DATABASE_ERROR",
         500,
         `Failed to update listing: ${this.extractErrorMessage(error)}`,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -427,14 +450,14 @@ export class FirebaseListingService implements IListingService {
 
     try {
       const docSnapshot = await getDoc(
-        doc(this.db, this.LISTINGS_COLLECTION, id)
+        doc(this.db, this.LISTINGS_COLLECTION, id),
       );
 
       if (!docSnapshot.exists()) {
         throw this.createServiceError(
           "NOT_FOUND",
           404,
-          `Listing with ID ${id} not found`
+          `Listing with ID ${id} not found`,
         );
       }
 
@@ -445,8 +468,8 @@ export class FirebaseListingService implements IListingService {
         data.images.map((img) =>
           this.deleteImageFromStorage(img.url).catch(() => {
             // Silently fail if image doesn't exist
-          })
-        )
+          }),
+        ),
       );
 
       // Soft delete: mark as inactive
@@ -461,7 +484,7 @@ export class FirebaseListingService implements IListingService {
         "DATABASE_ERROR",
         500,
         `Failed to delete listing: ${this.extractErrorMessage(error)}`,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -474,7 +497,7 @@ export class FirebaseListingService implements IListingService {
    */
   async search(
     query: string,
-    filters?: Omit<ListingFilters, "searchTerm">
+    filters?: Omit<ListingFilters, "searchTerm">,
   ): Promise<PaginatedResult<ApartmentListing>> {
     this.log("search", { query });
 
@@ -494,7 +517,7 @@ export class FirebaseListingService implements IListingService {
    */
   async getListingsByUser(
     userId: string,
-    filters?: ListingFilters
+    filters?: ListingFilters,
   ): Promise<PaginatedResult<ApartmentListing>> {
     this.log("getListingsByUser", { userId });
 
@@ -523,7 +546,7 @@ export class FirebaseListingService implements IListingService {
       // Execute query
       const baseQuery = query(
         collection(this.db, this.LISTINGS_COLLECTION),
-        ...constraints
+        ...constraints,
       );
 
       const allDocsSnapshot = await getDocs(baseQuery);
@@ -540,7 +563,7 @@ export class FirebaseListingService implements IListingService {
               data.title.toLowerCase().includes(searchLower) ||
               data.description.toLowerCase().includes(searchLower)
             );
-          }
+          },
         );
       }
 
@@ -559,8 +582,8 @@ export class FirebaseListingService implements IListingService {
         (doc: QueryDocumentSnapshot<DocumentData>) =>
           this.mapFirestoreToListing(
             doc.id,
-            doc.data() as FirestoreListingDocument
-          )
+            doc.data() as FirestoreListingDocument,
+          ),
       );
 
       return {
@@ -577,7 +600,7 @@ export class FirebaseListingService implements IListingService {
         "DATABASE_ERROR",
         500,
         `Failed to fetch user listings: ${this.extractErrorMessage(error)}`,
-        { originalError: error }
+        { originalError: error },
       );
     }
   }
@@ -597,7 +620,7 @@ export class FirebaseListingService implements IListingService {
    */
   private async processImages(
     images: any[],
-    listingId: string
+    listingId: string,
   ): Promise<ListingImage[]> {
     const processed: ListingImage[] = [];
 
@@ -616,7 +639,7 @@ export class FirebaseListingService implements IListingService {
           const imageId = this.generateId();
           const storageRef = ref(
             this.storage,
-            `listings/${listingId}/${imageId}`
+            `listings/${listingId}/${imageId}`,
           );
 
           // Upload file
@@ -637,7 +660,7 @@ export class FirebaseListingService implements IListingService {
             "STORAGE_ERROR",
             500,
             `Failed to upload image: ${this.extractErrorMessage(error)}`,
-            { originalError: error }
+            { originalError: error },
           );
         }
       }
@@ -674,7 +697,7 @@ export class FirebaseListingService implements IListingService {
    */
   private mapFirestoreToListing(
     id: string,
-    doc: FirestoreListingDocument
+    doc: FirestoreListingDocument,
   ): ApartmentListing {
     return {
       id,
@@ -710,7 +733,7 @@ export class FirebaseListingService implements IListingService {
     code: string,
     statusCode: number,
     message: string,
-    details?: Record<string, any>
+    details?: Record<string, any>,
   ): ServiceError {
     const error = new Error(message) as ServiceError;
     error.code = code;

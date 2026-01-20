@@ -62,13 +62,13 @@ export class MockListingService implements IListingService {
     });
     if (this.config.enableLogging) {
       console.log(
-        `[ListingService] Initialized with ${listings.length} listings`
+        `[ListingService] Initialized with ${listings.length} listings`,
       );
     }
   }
 
   async getListings(
-    filters?: ListingFilters
+    filters?: ListingFilters,
   ): Promise<PaginatedResult<ApartmentListing>> {
     this.log("getListings", filters);
 
@@ -87,7 +87,7 @@ export class MockListingService implements IListingService {
           apt.description.toLowerCase().includes(query) ||
           apt.location.city.toLowerCase().includes(query) ||
           apt.location.state.toLowerCase().includes(query) ||
-          apt.listedBy.name.toLowerCase().includes(query)
+          apt.listedBy.name.toLowerCase().includes(query),
       );
     }
 
@@ -110,7 +110,7 @@ export class MockListingService implements IListingService {
     // Apply units available filter
     if (filters?.minUnitsAvailable !== undefined) {
       results = results.filter(
-        (apt) => apt.unitsAvailable >= filters.minUnitsAvailable!
+        (apt) => apt.unitsAvailable >= filters.minUnitsAvailable!,
       );
     }
 
@@ -166,15 +166,19 @@ export class MockListingService implements IListingService {
       throw this.createServiceError(
         "NOT_FOUND",
         404,
-        `Listing with ID ${id} not found`
+        `Listing with ID ${id} not found`,
       );
     }
 
     return listing;
   }
 
-  async createListing(data: CreateListingInput): Promise<ApartmentListing> {
-    this.log("createListing", { title: data.title });
+  async createListing(
+    data: Omit<CreateListingInput, "listedBy">,
+    authenticatedUserId: string,
+    userRole: "agent" | "owner",
+  ): Promise<ApartmentListing> {
+    this.log("createListing", { title: data.title, authenticatedUserId });
 
     const id = `apt-${idCounter++}`;
     const now = new Date().toISOString();
@@ -185,9 +189,27 @@ export class MockListingService implements IListingService {
       id: `img-${id}-${index}`,
     }));
 
+    // Build listedBy from authenticated user (cannot be overridden by client)
+    const listedBy = {
+      id: authenticatedUserId,
+      name: data.listedByName || "Unknown User",
+      role: userRole,
+      phone: data.listedByPhone || "",
+      email: data.listedByEmail || "",
+      company: data.listedByCompany,
+    };
+
     const newListing: ApartmentListing = {
-      ...data,
+      title: data.title,
+      description: data.description,
+      rent: data.rent,
+      location: data.location,
+      bedrooms: data.bedrooms,
+      bathrooms: data.bathrooms,
+      unitsAvailable: data.unitsAvailable,
+      amenities: data.amenities,
       images: imagesWithIds,
+      listedBy,
       id,
       createdAt: now,
       updatedAt: now,
@@ -201,7 +223,7 @@ export class MockListingService implements IListingService {
 
   async updateListing(
     id: string,
-    data: UpdateListingInput
+    data: UpdateListingInput,
   ): Promise<ApartmentListing> {
     this.log("updateListing", { id });
 
@@ -210,7 +232,7 @@ export class MockListingService implements IListingService {
       throw this.createServiceError(
         "NOT_FOUND",
         404,
-        `Listing with ID ${id} not found`
+        `Listing with ID ${id} not found`,
       );
     }
 
@@ -234,7 +256,7 @@ export class MockListingService implements IListingService {
       throw this.createServiceError(
         "NOT_FOUND",
         404,
-        `Listing with ID ${id} not found`
+        `Listing with ID ${id} not found`,
       );
     }
 
@@ -248,7 +270,7 @@ export class MockListingService implements IListingService {
 
   async search(
     query: string,
-    filters?: Omit<ListingFilters, "searchTerm">
+    filters?: Omit<ListingFilters, "searchTerm">,
   ): Promise<PaginatedResult<ApartmentListing>> {
     this.log("search", { query });
 
@@ -260,14 +282,14 @@ export class MockListingService implements IListingService {
 
   async getListingsByUser(
     userId: string,
-    filters?: ListingFilters
+    filters?: ListingFilters,
   ): Promise<PaginatedResult<ApartmentListing>> {
     this.log("getListingsByUser", { userId });
 
     // Filter by user ID instead of by role
     let results = Array.from(apartmentListings.values());
     results = results.filter(
-      (apt) => apt.listedBy.id === userId && apt.isActive !== false
+      (apt) => apt.listedBy.id === userId && apt.isActive !== false,
     );
 
     // Apply additional filters
@@ -276,7 +298,7 @@ export class MockListingService implements IListingService {
       results = results.filter(
         (apt) =>
           apt.title.toLowerCase().includes(query) ||
-          apt.description.toLowerCase().includes(query)
+          apt.description.toLowerCase().includes(query),
       );
     }
 
@@ -325,7 +347,7 @@ export class MockListingService implements IListingService {
     code: string,
     statusCode: number,
     message: string,
-    details?: Record<string, any>
+    details?: Record<string, any>,
   ): ServiceError {
     const error = new Error(message) as ServiceError;
     error.code = code;
