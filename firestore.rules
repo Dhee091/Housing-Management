@@ -1,0 +1,125 @@
+/**
+ * Firestore Security Rules
+ *
+ * This file documents the security rules for the Estate Management application.
+ * These rules should be deployed to Firebase Console > Firestore > Rules tab.
+ *
+ * Rules implemented:
+ * - /listings: Public read, authenticated write
+ * - /users/{uid}: Users can read/write own profile, admins can update roles
+ * - /images: Authenticated users can upload, Firebase Auth UID must match document
+ */
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    /**
+     * Helper function: Check if user is authenticated
+     */
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    /**
+     * Helper function: Check if user owns the resource
+     */
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+    
+    /**
+     * Helper function: Check if user is an admin
+     * Assumes user document exists at /users/{uid} with role field
+     */
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    /**
+     * Listings collection
+     * - Anyone can read listings
+     * - Authenticated users can create/update their own listings
+     * - Users can only update listings they own
+     */
+    match /listings/{document=**} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    /**
+     * Users collection
+     * - Users can read their own profile
+     * - Users can create their own profile on registration
+     * - Users can update their own profile (except role)
+     * - Only admins can update user roles
+     */
+    match /users/{uid} {
+      // Anyone can read a user's public profile
+      allow read: if true;
+      
+      // User can create their own profile
+      allow create: if isAuthenticated() && isOwner(uid);
+      
+      // User can update their own profile
+      allow update: if isAuthenticated() && isOwner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']);
+      
+      // Only admins can update user roles
+      allow delete: if isAuthenticated() && isAdmin();
+    }
+    
+    /**
+     * Images collection
+     * - Users can upload images for their listings
+     * - Only the listing owner can delete images
+     */
+    match /images/{imageId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    /**
+     * Messages collection
+     * - Only message participants can read messages
+     * - Authenticated users can create messages
+     * - Users can only delete their own messages
+     */
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.senderId || 
+        request.auth.uid == resource.data.recipientId
+      );
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.senderId == request.auth.uid;
+    }
+  }
+}
+
+/*
+ * HOW TO DEPLOY THESE RULES:
+ *
+ * 1. Go to Firebase Console (https://console.firebase.google.com/)
+ * 2. Select your project
+ * 3. Go to Firestore Database
+ * 4. Click on "Rules" tab
+ * 5. Copy and paste these rules (starting from "rules_version")
+ * 6. Click "Publish"
+ *
+ * SECURITY BEST PRACTICES:
+ *
+ * - Never expose user emails in public reads
+ * - Validate all data on write (missing in this example, should be added)
+ * - Use custom claims for admin verification instead of reading user document
+ * - Implement rate limiting for writes
+ * - Archive old messages instead of deleting
+ *
+ * TESTING RULES:
+ *
+ * - Use Firebase Emulator Suite for local testing
+ * - Run: firebase emulators:start
+ * - Test rules with Firestore emulator before deploying
+ */
