@@ -5,7 +5,7 @@
 You now have a **production-grade, backend-agnostic architecture** that completely decouples your React UI from any backend implementation. This means:
 
 - ✅ Switch from mock data to Firebase in 2 lines of code
-- ✅ Migrate to Supabase without touching React components  
+- ✅ Migrate to Supabase without touching React components
 - ✅ Zero UI code changes when swapping backends
 - ✅ Clear separation of concerns following SOLID principles
 - ✅ Type-safe data flows with full TypeScript support
@@ -52,6 +52,7 @@ UpdateListingInput { all fields optional }
 ```
 
 **Why this design:**
+
 - No framework-specific types
 - Works with SQL, NoSQL, REST, GraphQL
 - Minimal - only essential data
@@ -63,17 +64,29 @@ The contract defining what operations are possible:
 
 ```typescript
 interface IListingService {
-  getListings(filters?: ListingFilters): Promise<PaginatedResult<ApartmentListing>>
-  getListingById(id: string): Promise<ApartmentListing>
-  createListing(data: CreateListingInput): Promise<ApartmentListing>
-  updateListing(id: string, data: UpdateListingInput): Promise<ApartmentListing>
-  deleteListing(id: string): Promise<void>
-  search(query: string, filters?: Omit<ListingFilters, 'searchTerm'>): Promise<PaginatedResult<ApartmentListing>>
-  getListingsByUser(userId: string, filters?: ListingFilters): Promise<PaginatedResult<ApartmentListing>>
+  getListings(
+    filters?: ListingFilters
+  ): Promise<PaginatedResult<ApartmentListing>>;
+  getListingById(id: string): Promise<ApartmentListing>;
+  createListing(data: CreateListingInput): Promise<ApartmentListing>;
+  updateListing(
+    id: string,
+    data: UpdateListingInput
+  ): Promise<ApartmentListing>;
+  deleteListing(id: string): Promise<void>;
+  search(
+    query: string,
+    filters?: Omit<ListingFilters, "searchTerm">
+  ): Promise<PaginatedResult<ApartmentListing>>;
+  getListingsByUser(
+    userId: string,
+    filters?: ListingFilters
+  ): Promise<PaginatedResult<ApartmentListing>>;
 }
 ```
 
 **Benefits:**
+
 - Every implementation must provide these methods
 - React components depend on this interface, not concrete implementations
 - Adding new backends is enforced by the compiler
@@ -104,7 +117,7 @@ export async function initializeListingService(): Promise<IListingService> {
 
 // To migrate to Firebase: just change 2 lines
 export async function initializeListingService(): Promise<IListingService> {
-  const service = new FirebaseListingService({...config});
+  const service = new FirebaseListingService({ ...config });
   await service.connect();
   return service;
 }
@@ -127,6 +140,7 @@ const listings = await service.getListings();
 ### 6. **Refactored Home Component** (`src/pages/Home.tsx`)
 
 Before:
+
 ```typescript
 // Direct mockData import - tightly coupled
 import { mockApartments } from "../data/mockData";
@@ -136,6 +150,7 @@ const filteredApartments = useMemo(() => {
 ```
 
 After:
+
 ```typescript
 // Service-based - completely decoupled
 const { service, loading, error } = useListingService();
@@ -143,12 +158,15 @@ const [listings, setListings] = useState<ApartmentListing[]>([]);
 
 useEffect(() => {
   if (!service) return;
-  const results = await service.getListings({ /* filters */ });
+  const results = await service.getListings({
+    /* filters */
+  });
   setListings(results.items);
 }, [service, filters]);
 ```
 
 **Benefits:**
+
 - No direct backend SDK imports
 - Works with any backend implementation
 - Error handling built-in
@@ -157,6 +175,7 @@ useEffect(() => {
 ### 7. **Comprehensive Documentation** (`ARCHITECTURE_PATTERNS.md`)
 
 Complete guide covering:
+
 - Architecture diagram and layer separation
 - Why this pattern ensures migration safety
 - How to add a new backend (Firebase example)
@@ -194,6 +213,7 @@ src/
 ## Key Architectural Principles
 
 ### 1. **Dependency Inversion**
+
 ```
 UI → IListingService (interface)
         ↓
@@ -212,6 +232,7 @@ To swap backends:
 ```
 
 ### 2. **Single Responsibility**
+
 - `domain.ts`: Data structures only
 - `types.ts`: Interface contracts only
 - `mockListingService.ts`: Business logic implementation
@@ -219,6 +240,7 @@ To swap backends:
 - Components: Display logic only
 
 ### 3. **Backend Agnostic Design**
+
 - No `firebase`, `@supabase/supabase-js`, or SDK imports in UI
 - All data transformed to domain models
 - Adapters handle format conversion
@@ -229,8 +251,8 @@ To swap backends:
 ### In React Components
 
 ```typescript
-import { useListingService } from '../hooks/useListingService';
-import type { ApartmentListing } from '../models/domain';
+import { useListingService } from "../hooks/useListingService";
+import type { ApartmentListing } from "../models/domain";
 
 export function ListingsPage() {
   const { service, loading, error } = useListingService();
@@ -242,17 +264,17 @@ export function ListingsPage() {
     const fetch = async () => {
       try {
         const result = await service.getListings({
-          state: 'Lagos',
+          state: "Lagos",
           maxRent: 500000,
           minUnitsAvailable: 1,
           page: 1,
           pageSize: 20,
-          sortBy: 'createdAt',
-          sortOrder: 'desc'
+          sortBy: "createdAt",
+          sortOrder: "desc",
         });
         setListings(result.items);
       } catch (err) {
-        console.error('Failed to fetch:', err);
+        console.error("Failed to fetch:", err);
       }
     };
 
@@ -264,7 +286,7 @@ export function ListingsPage() {
 
   return (
     <div>
-      {listings.map(listing => (
+      {listings.map((listing) => (
         <ApartmentCard key={listing.id} apartment={listing} />
       ))}
     </div>
@@ -281,9 +303,15 @@ export function ListingsPage() {
 ```typescript
 // src/services/implementations/firebaseListingService.ts
 
-import type { IListingService } from '../types';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import type { IListingService } from "../types";
+import { initializeApp } from "firebase/app";
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+} from "firebase/firestore";
 
 export class FirebaseListingService implements IListingService {
   private db: Firestore;
@@ -297,14 +325,16 @@ export class FirebaseListingService implements IListingService {
     this.db = getFirestore(app);
   }
 
-  async getListings(filters?: ListingFilters): Promise<PaginatedResult<ApartmentListing>> {
+  async getListings(
+    filters?: ListingFilters
+  ): Promise<PaginatedResult<ApartmentListing>> {
     // Transform Firestore query results to domain models
-    const ref = collection(this.db, 'listings');
+    const ref = collection(this.db, "listings");
     const snapshot = await getDocs(ref);
-    
-    const items = snapshot.docs.map(doc => ({
+
+    const items = snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
     })) as ApartmentListing[];
 
     return {
@@ -313,7 +343,7 @@ export class FirebaseListingService implements IListingService {
       page: 1,
       pageSize: items.length,
       totalPages: 1,
-      hasMore: false
+      hasMore: false,
     };
   }
 
@@ -326,7 +356,7 @@ export class FirebaseListingService implements IListingService {
 ```typescript
 // src/services/listingService.ts
 
-import { FirebaseListingService } from './implementations/firebaseListingService';
+import { FirebaseListingService } from "./implementations/firebaseListingService";
 
 export async function initializeListingService(): Promise<IListingService> {
   if (listingServiceInstance) return listingServiceInstance;
@@ -344,6 +374,7 @@ export async function initializeListingService(): Promise<IListingService> {
 ```
 
 ### Step 3: Done
+
 - No changes to React components
 - No changes to Home.tsx
 - No changes to ApartmentCard
@@ -358,12 +389,14 @@ The architecture makes testing easy:
 class MockTestService implements IListingService {
   async getListings() {
     return {
-      items: [/* test data */],
+      items: [
+        /* test data */
+      ],
       total: 1,
       page: 1,
       pageSize: 20,
       totalPages: 1,
-      hasMore: false
+      hasMore: false,
     };
   }
   // ...
@@ -375,15 +408,15 @@ render(<ListingsPage service={mockTestService} />);
 
 ## Benefits Summary
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| **Backend SDK in UI** | Scattered everywhere | Nowhere - isolated to /services |
-| **Changing backends** | Rewrite everything | 2 lines changed |
-| **Type Safety** | Weak - SDK types mix with UI | Strong - domain models only |
-| **Testing** | Difficult - backend coupling | Easy - mock service |
-| **Code Organization** | Unclear separation | Clear layers |
-| **Migration Cost** | Extremely high | ~30 minutes for new backend |
-| **Scalability** | Hard to maintain | Easy to maintain |
+| Aspect                | Before                       | After                           |
+| --------------------- | ---------------------------- | ------------------------------- |
+| **Backend SDK in UI** | Scattered everywhere         | Nowhere - isolated to /services |
+| **Changing backends** | Rewrite everything           | 2 lines changed                 |
+| **Type Safety**       | Weak - SDK types mix with UI | Strong - domain models only     |
+| **Testing**           | Difficult - backend coupling | Easy - mock service             |
+| **Code Organization** | Unclear separation           | Clear layers                    |
+| **Migration Cost**    | Extremely high               | ~30 minutes for new backend     |
+| **Scalability**       | Hard to maintain             | Easy to maintain                |
 
 ## What's Production Ready
 
@@ -422,6 +455,7 @@ render(<ListingsPage service={mockTestService} />);
 ## Conclusion
 
 You have a **senior-engineer-level architecture** that:
+
 - Protects against vendor lock-in
 - Makes migrations painless
 - Ensures code quality and testability
