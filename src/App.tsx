@@ -23,7 +23,9 @@ import "./App.css";
 function App() {
   // Initialize Firebase on app startup
   useEffect(() => {
-    initializeFirebase();
+    if (import.meta.env.VITE_USE_FIREBASE === "true") {
+      initializeFirebase();
+    }
   }, []);
 
   return (

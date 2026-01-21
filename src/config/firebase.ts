@@ -26,13 +26,12 @@ import { getAuth, connectAuthEmulator } from "firebase/auth";
 // Replace with your Firebase project credentials
 // Get these from Firebase Console > Project Settings
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_REACT_APP_FIREBASE_API_KEY || "",
-  authDomain: import.meta.env.VITE_REACT_APP_FIREBASE_AUTH_DOMAIN || "",
-  projectId: import.meta.env.VITE_REACT_APP_FIREBASE_PROJECT_ID || "",
-  storageBucket: import.meta.env.VITE_REACT_APP_FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId:
-    import.meta.env.VITE_REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: import.meta.env.VITE_REACT_APP_FIREBASE_APP_ID || "",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 // ============================================================================
@@ -59,34 +58,37 @@ let app: FirebaseApp | null = null;
  * ```
  */
 export function initializeFirebase(): FirebaseApp {
-  if (app) {
-    console.warn("[Firebase] Already initialized");
-    return app;
+  if (app) return app;
+
+  if (import.meta.env.VITE_USE_FIREBASE !== "true") {
+    throw new Error(
+      "[Firebase] Firebase is disabled. Set VITE_USE_FIREBASE=true to enable.",
+    );
   }
 
-  try {
-    // Initialize Firebase
-    app = initializeApp(firebaseConfig);
-
-    // Connect to emulators in development (optional)
-    if (
-      import.meta.env.DEV &&
-      import.meta.env.VITE_REACT_APP_USE_FIREBASE_EMULATOR
-    ) {
-      connectFirestoreEmulator(getFirestore(app), "localhost", 8080);
-      connectStorageEmulator(getStorage(app), "localhost", 9199);
-      connectAuthEmulator(getAuth(app), "http://localhost:9099", {
-        disableWarnings: true,
-      });
-      console.log("[Firebase] Connected to local emulators");
-    }
-
-    console.log("[Firebase] Initialized successfully");
-    return app;
-  } catch (error) {
-    console.error("[Firebase] Initialization failed:", error);
-    throw error;
+  // Validate required config
+  if (
+    !firebaseConfig.apiKey ||
+    !firebaseConfig.authDomain ||
+    !firebaseConfig.projectId
+  ) {
+    throw new Error("[Firebase] Missing Firebase environment variables.");
   }
+
+  app = initializeApp(firebaseConfig);
+
+  if (
+    import.meta.env.DEV &&
+    import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true"
+  ) {
+    connectFirestoreEmulator(getFirestore(app), "localhost", 8080);
+    connectStorageEmulator(getStorage(app), "localhost", 9199);
+    connectAuthEmulator(getAuth(app), "http://localhost:9099", {
+      disableWarnings: true,
+    });
+  }
+
+  return app;
 }
 
 /**
